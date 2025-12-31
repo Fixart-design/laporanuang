@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>FinanceCouple v3.0 - Safe Mode</title>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Tesseract.js (OCR) -->
+    <script src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Supabase JS Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#4f46e5', 
+                        secondary: '#64748b', 
+                        savings: '#10b981',
+                        background: '#f1f5f9', 
+                        surface: '#ffffff',
+                    },
+                    fontFamily: { sans: ['Inter', 'sans-serif'] }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #f1f5f9; -webkit-tap-highlight-color: transparent; }
+        .fade-in { animation: fadeIn 0.3s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .loader { border: 3px solid #f3f3f3; border-top: 3px solid #4f46e5; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useRef, createContext, useContext } = React;
+
+        // ==========================================
+        // 1. KONFIGURASI SUPABASE
+        // ==========================================
+        const SUPABASE_URL = 'https://lyldycagvpjxdbknfkpr.supabase.co'; 
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx5bGR5Y2FndnBqeGRia25ma3ByIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcxNzAxODAsImV4cCI6MjA4Mjc0NjE4MH0.7GnpOxiLNWilvvxWi2YYbBYFz_GozOG5aj56_conXBo'; 
+
+        // Inisialisasi Supabase
+        let supabase;
+        try {
+            supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        } catch (e) {
+            console.error("Supabase Init Error:", e);
+        }
+
+        // ==========================================
+        // 2. UTILITIES
+        // ==========================================
+        
+        const formatCurrency = (amount) => {
+            return new Intl.NumberFormat('id-ID', {
+                style: 'currency',
+                currency: 'IDR',
+                minimumFractionDigits: 0
+            }).format(amount);
+        };
+
+        const generateId = () => Math.random().toString(36).substr(2, 9);
+        const MONTHS = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+
+        // Icons
+        const Icons = {
+            Home: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>,
+            Chart: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/></svg>,
+            Plus: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>,
+            User: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
+            Trash: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>,
+            Camera: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>,
+            ArrowDown: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m18 15-6-6-6 6"/></svg>,
+            Wallet: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4"/><path d="M4 6v12a2 2 0 0 0 2 2h14v-4"/><path d="M18 12a2 2 0 0 0-2 2c0 1.1.9 2 2 2h4v-4h-4z"/></svg>,
+            Check: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        };
+
+        // ==========================================
+        // 3. SERVICES
+        // ==========================================
+
+        const AuthService = {
+            login: () => {
+                return new Promise((resolve) => {
+                    setTimeout(() => {
+                        const userStr = localStorage.getItem('fc_user');
+                        if (userStr) {
+                            resolve(JSON.parse(userStr));
+                        } else {
+                            const newUser = {
+                                uid: generateId(),
+                                householdId: null,
+                                displayName: 'User ' + Math.floor(Math.random() * 1000)
+                            };
+                            localStorage.setItem('fc_user', JSON.stringify(newUser));
+                            resolve(newUser);
+                        }
+                    }, 500);
+                });
+            },
+            updateHousehold: (id) => {
+                const user = JSON.parse(localStorage.getItem('fc_user'));
+                user.householdId = id;
+                localStorage.setItem('fc_user', JSON.stringify(user));
+                localStorage.setItem('fc_household_id', id);
+                return user;
+            },
+            logout: () => {
+                localStorage.clear();
+                window.location.reload();
+            },
+            getUser: () => JSON.parse(localStorage.getItem('fc_user'))
+        };
+
+        const DataStore = {
+            getTransactions: async (householdId) => {
+                if(!supabase) return [];
+                try {
+                    const { data, error } = await supabase
+                        .from('transactions')
+                        .select('*')
+                        .eq('household_id', householdId)
+                        .order('created_at', { ascending: false });
+                    
+                    if (error) {
+                        console.error("Error fetching:", error);
+                        return [];
+                    }
+                    return data;
+                } catch (e) {
+                    console.error("Fetch failed:", e);
+                    return [];
+                }
+            },
+            addTransaction: async (data) => {
+                if(!supabase) return null;
+                try {
+                    const newTx = { 
+                        id: generateId(), 
+                        created_at: new Date().toISOString(), 
+                        ...data 
+                    };
+                    
+                    const { error } = await supabase
+                        .from('transactions')
+                        .insert([newTx]);
+                    
+                    if(error) console.error("Insert Error:", error);
+                    return newTx;
+                } catch (e) {
+                    console.error("Insert failed:", e);
+                    return null;
+                }
+            },
+            deleteTransaction: async (id) => {
+                if(!supabase) return;
+                try {
+                    const { error } = await supabase
+                        .from('transactions')
+                        .delete()
+                        .eq('id', id);
+                    
+                    if(error) console.error("Delete Error:", error);
+                } catch (e) {
+                    console.error("Delete failed:", e);
+                }
+            },
+            getSavings: async (householdId) => {
+                if(!supabase) return { current: 0, target: 10000000 };
+                try {
+                    const { data, error } = await supabase
+                        .from('savings')
+                        .select('*')
+                        .eq('household_id', householdId)
+                        .single();
+                    
+                    if (error || !data) {
+                        return { current: 0, target: 10000000 };
+                    }
+                    return data;
+                } catch (e) {
+                    console.error("Get Savings failed:", e);
+                    return { current: 0, target: 10000000 };
+                }
+            },
+            updateSavings: async (householdId, newData) => {
+                if(!supabase) return null;
+                try {
+                    const { data, error } = await supabase
+                        .from('savings')
+                        .upsert({ household_id: householdId, ...newData })
+                        .select()
+                        .single();
+                    
+                    if(error) console.error("Upsert Savings Error:", error);
+                    return data;
+                } catch (e) {
+                    console.error("Update Savings failed:", e);
+                    return null;
+                }
+            }
+        };
+
+        const AIService = {
+            cleanText: (text) => text.replace(/[|]/g, 'I').replace(/\s+/g, ' ').toLowerCase(),
+            extractAmount: (text) => {
+                const totalMatch = text.match(/total\s*[:.]?\s*([\d.,k]+|\d+)/i);
+                if (totalMatch) return AIService.parseCurrency(totalMatch[1]);
+                const amountMatch = text.match(/jumlah\s*[:.]?\s*([\d.,k]+|\d+)/i);
+                if (amountMatch) return AIService.parseCurrency(amountMatch[1]);
+                const allNumbers = text.match(/\d[\d.,k]*/g);
+                if (allNumbers) {
+                    const values = allNumbers.map(AIService.parseCurrency).sort((a, b) => b - a);
+                    return values[0]; 
+                }
+                return 0;
+            },
+            parseCurrency: (str) => {
+                if (!str) return 0;
+                let s = str.toString().toLowerCase().replace(/[^0-9k.]/g, '');
+                if (s.includes('k')) { s = s.replace(/k/g, ''); return parseInt(s) * 1000; }
+                if (s.includes('.')) {
+                    const parts = s.split('.');
+                    if (parts.length > 2) return parseInt(s.replace(/\./g, ''));
+                    if (parts[1].length === 2) return parseFloat(s);
+                    return parseInt(s.replace(/\./g, ''));
+                }
+                return parseInt(s);
+            },
+            analyzeText: (text) => {
+                const clean = AIService.cleanText(text);
+                const amount = AIService.extractAmount(clean);
+                let type = 'expense';
+                let category = 'Lainnya';
+                
+                if (clean.includes('nabung') || clean.includes('tabung') || clean.includes('setor')) {
+                    category = 'Tabungan';
+                    type = 'expense'; 
+                }
+                else if (clean.includes('indomaret') || clean.includes('alfamart') || clean.includes('supermarket')) category = 'Belanja';
+                else if (clean.includes('bensin') || clean.includes('pertamina')) category = 'Transportasi';
+                else if (clean.includes('makan') || clean.includes('cafe')) category = 'Makanan';
+                else if (clean.includes('gaji')) { type = 'income'; category = 'Gaji'; }
+
+                return {
+                    item: text.length > 30 ? text.substring(0, 30) + '...' : text,
+                    amount: amount || 0, 
+                    type: type,
+                    category: category,
+                    date: new Date().toISOString().split('T')[0]
+                };
+            },
+            analyzeImage: async (file) => {
+                try {
+                    const worker = await Tesseract.createWorker('eng');
+                    const { data: { text } } = await worker.recognize(file);
+                    await worker.terminate();
+                    return AIService.analyzeText(text);
+                } catch (err) {
+                    console.error(err);
+                    return { item: "Foto Gagal Dipindai", amount: 0, type: 'expense', category: 'Lainnya', date: new Date().toISOString().split('T')[0] };
+                }
+            }
+        };
+
+        // ==========================================
+        // 4. CONTEXT & STATE MANAGEMENT (SAFE MODE)
+        // ==========================================
+        const AppContext = createContext();
+        const AppProvider = ({ children }) => {
+            const [user, setUser] = useState(null);
+            const [transactions, setTransactions] = useState([]);
+            const [savings, setSavings] = useState({ current: 0, target: 10000000 });
+            const [loading, setLoading] = useState(true);
+
+            // Fetch Data Function
+            const refreshData = async () => {
+                if (!user?.householdId) return; // Safety check
+                console.log("Refreshing data for:", user.householdId);
+                
+                try {
+                    // Ambil Transactions
+                    const txData = await DataStore.getTransactions(user.householdId);
+                    setTransactions(txData || []);
+                    
+                    // Ambil Savings
+                    const savData = await DataStore.getSavings(user.householdId);
+                    setSavings(savData || { current: 0, target: 10000000 });
+                } catch (e) {
+                    console.error("Refresh failed", e);
+                }
+            };
+
+            useEffect(() => {
+                const init = async () => {
+                    const currentUser = await AuthService.login();
+                    setUser(currentUser);
+                    
+                    if (currentUser.householdId) {
+                        await refreshData();
+                    }
+                    setLoading(false);
+                };
+                init();
+            }, []); 
+
+            const addTransaction = async (txData) => {
+                if (!user.householdId) return alert("Bergabung ke Household dulu!");
+                
+                await DataStore.addTransaction({ ...txData, householdId: user.householdId, userId: user.uid });
+                await refreshData(); // Manual refresh
+                
+                if (txData.category === 'Tabungan') {
+                    let currentSav = savings.current || 0;
+                    if (txData.type === 'expense') currentSav += txData.amount;
+                    else if (txData.type === 'income') currentSav -= txData.amount;
+                    
+                    const updated = await DataStore.updateSavings(user.householdId, { current: currentSav });
+                    setSavings(updated);
+                    await refreshData(); 
+                }
+            };
+
+            const deleteTransaction = async (id) => {
+                await DataStore.deleteTransaction(id);
+                await refreshData();
+            };
+
+            const joinHousehold = (id) => {
+                console.log("Joining household:", id);
+                AuthService.updateHousehold(id);
+                // FORCE RELOAD - Ini solusi stuck
+                window.location.href = window.location.href;
+            };
+
+            return (
+                <AppContext.Provider value={{ user, transactions, addTransaction, deleteTransaction, joinHousehold, loading, savings }}>
+                    {children}
+                </AppContext.Provider>
+            );
+        };
+        const useApp = () => useContext(AppContext);
+
+        // ==========================================
+        // 5. COMPONENTS
+        // ==========================================
+
+        const Card = ({ children, className = "" }) => (
+            <div className={`bg-white rounded-2xl shadow-sm border border-slate-100 p-4 ${className}`}>
+                {children}
+            </div>
+        );
+
+        const Button = ({ children, onClick, variant = 'primary', className = '', loading = false, disabled = false }) => {
+            const baseStyle = "w-full py-3 rounded-xl font-medium text-sm transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2";
+            const variants = {
+                primary: "bg-primary text-white shadow-lg shadow-indigo-200 hover:bg-indigo-700",
+                secondary: "bg-slate-100 text-slate-600 hover:bg-slate-200",
+                savings: "bg-savings text-white shadow-lg shadow-emerald-200 hover:bg-emerald-600",
+                danger: "bg-red-50 text-red-600 hover:bg-red-100",
+                ghost: "bg-transparent text-slate-500 border border-slate-200 hover:bg-slate-50"
+            };
+            return (
+                <button onClick={onClick} disabled={loading || disabled} className={`${baseStyle} ${variants[variant]} ${className}`}>
+                    {loading && <div className="loader" />}
+                    {children}
+                </button>
+            );
+        };
+
+        const SavingsView = () => {
+            const { savings, addTransaction, user } = useApp();
+            const [mode, setMode] = useState(null); 
+            const [amount, setAmount] = useState('');
+            const [targetInput, setTargetInput] = useState(savings.target);
+
+            const handleDeposit = () => {
+                if(!amount || isNaN(amount)) return;
+                addTransaction({
+                    item: "Setor Tabungan",
+                    amount: Number(amount),
+                    type: 'expense',
+                    category: 'Tabungan',
+                    date: new Date().toISOString().split('T')[0]
+                });
+                setMode(null);
+                setAmount('');
+            };
+
+            const handleWithdraw = () => {
+                if(!amount || isNaN(amount)) return;
+                if(Number(amount) > savings.current) return alert("Saldo tabungan tidak cukup!");
+                addTransaction({
+                    item: "Tarik Tabungan",
+                    amount: Number(amount),
+                    type: 'income',
+                    category: 'Tabungan',
+                    date: new Date().toISOString().split('T')[0]
+                });
+                setMode(null);
+                setAmount('');
+            };
+
+            const handleSetTarget = async () => {
+                if(!targetInput || isNaN(targetInput)) return;
+                await DataStore.updateSavings(user.householdId, { target: Number(targetInput) });
+                window.location.reload(); 
+            };
+
+            const progress = Math.min((savings.current / savings.target) * 100, 100);
+
+            return (
+                <div className="pb-24 fade-in p-6">
+                    <header className="mb-6">
+                        <h1 className="text-2xl font-bold text-slate-800">Tabungan & Target</h1>
+                    </header>
+
+                    <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-3xl p-6 text-white shadow-xl shadow-emerald-200 mb-6 relative overflow-hidden">
+                        <div className="absolute -right-10 -top-10 w-40 h-40 bg-white/10 rounded-full blur-2xl"></div>
+                        <div className="relative z-10">
+                            <p className="text-emerald-100 text-sm font-medium mb-1">Saldo Tabungan</p>
+                            <h2 className="text-4xl font-bold mb-4">{formatCurrency(savings.current)}</h2>
+                            
+                            <div className="mb-2 flex justify-between text-xs font-medium text-emerald-100">
+                                <span>Progress</span>
+                                <span>{Math.round(progress)}%</span>
+                            </div>
+                            <div className="h-3 bg-black/20 rounded-full overflow-hidden">
+                                <div className="h-full bg-white rounded-full transition-all duration-1000" style={{width: `${progress}%`}} />
+                            </div>
+                            <div className="mt-3 text-xs text-emerald-200">Target: {formatCurrency(savings.target)}</div>
+                        </div>
+                    </div>
+
+                    {mode === null && (
+                        <div className="grid grid-cols-2 gap-3 mb-6">
+                            <Button variant="savings" onClick={() => setMode('deposit')} className="flex-col gap-2 h-24 items-center justify-center">
+                                <span className="text-2xl font-bold">+</span>
+                                <span>Setor</span>
+                            </Button>
+                            <Button variant="danger" onClick={() => setMode('withdraw')} className="flex-col gap-2 h-24 items-center justify-center bg-white text-slate-600 border border-slate-200">
+                                <span className="text-2xl font-bold text-red-500">-</span>
+                                <span>Tarik</span>
+                            </Button>
+                        </div>
+                    )}
+
+                    {mode === 'deposit' && (
+                        <Card className="mb-6">
+                            <h3 className="font-bold text-slate-800 mb-4">Setor ke Tabungan</h3>
+                            <input type="number" placeholder="Nominal..." value={amount} onChange={e => setAmount(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-lg font-bold text-slate-800 mb-4 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                            <div className="flex gap-2">
+                                <Button variant="secondary" onClick={() => setMode(null)}>Batal</Button>
+                                <Button variant="savings" onClick={handleDeposit}>Simpan</Button>
+                            </div>
+                        </Card>
+                    )}
+
+                    {mode === 'withdraw' && (
+                        <Card className="mb-6">
+                            <h3 className="font-bold text-slate-800 mb-4">Tarik dari Tabungan</h3>
+                            <p className="text-xs text-slate-500 mb-2">Tersedia: {formatCurrency(savings.current)}</p>
+                            <input type="number" placeholder="Nominal..." value={amount} onChange={e => setAmount(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-lg font-bold text-slate-800 mb-4 focus:outline-none focus:ring-2 focus:ring-red-500" />
+                            <div className="flex gap-2">
+                                <Button variant="secondary" onClick={() => setMode(null)}>Batal</Button>
+                                <Button variant="danger" onClick={handleWithdraw}>Tarik</Button>
+                            </div>
+                        </Card>
+                    )}
+
+                    {mode === 'target' && (
+                        <Card className="mb-6">
+                            <h3 className="font-bold text-slate-800 mb-4">Edit Target</h3>
+                            <input type="number" value={targetInput} onChange={e => setTargetInput(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-lg font-bold text-slate-800 mb-4" />
+                            <div className="flex gap-2">
+                                <Button variant="secondary" onClick={() => setMode(null)}>Batal</Button>
+                                <Button onClick={handleSetTarget}>Simpan Target</Button>
+                            </div>
+                        </Card>
+                    )}
+
+                    <div className="flex justify-center mt-4">
+                         <button onClick={() => setMode('target')} className="text-xs text-slate-400 hover:text-emerald-600 flex items-center gap-1">
+                            Edit Target Tabungan
+                         </button>
+                    </div>
+                    <h3 className="font-bold text-slate-700 text-sm mt-8 mb-3">Riwayat Tabungan</h3>
+                    <SavingsHistory />
+                </div>
+            );
+        };
+
+        const SavingsHistory = () => {
+             const { transactions } = useApp();
+             const list = transactions.filter(t => t.category === 'Tabungan').sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+             
+             return (
+                <div className="space-y-2">
+                    {list.length === 0 && <div className="text-center py-4 text-slate-400 text-xs">Belum ada riwayat.</div>}
+                    {list.map(tx => (
+                        <div key={tx.id} className="bg-white p-3 rounded-xl border border-slate-100 flex justify-between items-center">
+                            <div>
+                                <p className="text-sm font-medium text-slate-800">{tx.item}</p>
+                                <p className="text-[10px] text-slate-400">{tx.date}</p>
+                            </div>
+                            <span className={`text-sm font-bold ${tx.type === 'income' ? 'text-red-500' : 'text-emerald-600'}`}>
+                                {tx.type === 'expense' ? '+' : '-'}{formatCurrency(tx.amount)}
+                            </span>
+                        </div>
+                    ))}
+                </div>
+             );
+        }
+
+        const AIInput = ({ onBack }) => {
+            const { addTransaction } = useApp();
+            const [mode, setMode] = useState('text');
+            const [inputText, setInputText] = useState('');
+            const [analyzing, setAnalyzing] = useState(false);
+            const [result, setResult] = useState(null);
+            const [ocrProgress, setOcrProgress] = useState(0);
+
+            const handleTextSubmit = async () => {
+                if (!inputText.trim()) return;
+                setAnalyzing(true);
+                setTimeout(() => {
+                    const data = AIService.analyzeText(inputText);
+                    setResult(data);
+                    setAnalyzing(false);
+                }, 600);
+            };
+
+            const handleImageSubmit = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                setAnalyzing(true);
+                setOcrProgress(0);
+                try {
+                    const worker = await Tesseract.createWorker('eng');
+                    worker.logger = m => { if(m.status === 'recognizing text') setOcrProgress(Math.round(m.progress * 100)); };
+                    const { data: { text } } = await worker.recognize(file);
+                    await worker.terminate();
+                    const analyzedData = AIService.analyzeText(text);
+                    if (!analyzedData.item || analyzedData.item === "Foto Gagal Dipindai") {
+                        const firstLine = text.split('\n')[0];
+                        analyzedData.item = firstLine ? (firstLine.substring(0, 25) + '...') : "Struk Belanja";
+                    }
+                    setResult(analyzedData);
+                } catch (err) {
+                    console.error(err);
+                    alert("Gagal memproses gambar.");
+                    setResult({ item: "Input Manual", amount: 0, type: 'expense', category: 'Lainnya', date: new Date().toISOString().split('T')[0] });
+                } finally {
+                    setAnalyzing(false);
+                }
+            };
+
+            const handleSave = () => {
+                if (!result) return;
+                if (result.amount === 0) { if(!confirm("Nominal Rp0. Yakin?")) return; }
+                addTransaction(result);
+                onBack();
+            };
+
+            return (
+                <div className="fixed inset-0 bg-white z-[60] flex flex-col fade-in">
+                    <header className="px-6 py-4 border-b border-slate-100 flex items-center gap-4 bg-white">
+                        <button onClick={onBack} className="p-2 hover:bg-slate-50 rounded-full text-slate-600"><Icons.ArrowDown /></button>
+                        <h1 className="font-bold text-lg text-slate-800">Input Cerdas (AI)</h1>
+                    </header>
+
+                    <div className="flex-1 p-6 flex flex-col overflow-y-auto">
+                        {!result ? (
+                            <>
+                                <div className="flex bg-slate-100 p-1 rounded-xl mb-6">
+                                    <button onClick={() => setMode('text')} className={`flex-1 py-2 text-sm font-medium rounded-lg ${mode === 'text' ? 'bg-white text-primary shadow-sm' : 'text-slate-500'}`}>Teks</button>
+                                    <button onClick={() => setMode('image')} className={`flex-1 py-2 text-sm font-medium rounded-lg ${mode === 'image' ? 'bg-white text-primary shadow-sm' : 'text-slate-500'}`}>Foto (OCR)</button>
+                                </div>
+
+                                {mode === 'text' ? (
+                                    <div className="flex-1 flex flex-col">
+                                        <textarea className="flex-1 bg-slate-50 border border-slate-200 rounded-2xl p-4 text-slate-800 resize-none focus:outline-none focus:ring-2 focus:ring-primary text-sm min-h-[200px]" placeholder="Contoh: Nabung 50rb..." value={inputText} onChange={(e) => setInputText(e.target.value)} />
+                                        <Button onClick={handleTextSubmit} loading={analyzing} className="mt-4">Analisis Teks</Button>
+                                    </div>
+                                ) : (
+                                    <div className="flex-1 flex flex-col">
+                                        <div className="border-2 border-dashed border-slate-200 rounded-2xl flex-1 flex flex-col items-center justify-center bg-slate-50 relative overflow-hidden min-h-[300px]">
+                                            <input type="file" id="file-upload" className="hidden" accept="image/*" onChange={handleImageSubmit} />
+                                            {!analyzing ? (
+                                                <label htmlFor="file-upload" className="cursor-pointer flex flex-col items-center w-full h-full justify-center">
+                                                    <div className="w-16 h-16 bg-white text-primary rounded-full flex items-center justify-center mb-4 shadow-sm"><Icons.Camera /></div>
+                                                    <p className="text-slate-600 font-medium text-sm">Tap untuk ambil foto</p>
+                                                </label>
+                                            ) : (
+                                                <div className="text-center p-6">
+                                                    <div className="loader mx-auto mb-4" style={{width: 32, height: 32}} />
+                                                    <p className="text-sm font-medium text-slate-700">Sedang memindai...</p>
+                                                    <p className="text-xs text-slate-400 mt-1">{ocrProgress}% Selesai</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                        {analyzing && <Button variant="secondary" className="mt-4 opacity-50">Memproses...</Button>}
+                                    </div>
+                                )}
+                            </>
+                        ) : (
+                            <div className="flex-1 flex flex-col animate-in fade-in slide-in-from-bottom-4">
+                                <div className="bg-indigo-50 text-indigo-700 p-4 rounded-xl text-sm mb-6">
+                                    ✅ Data berhasil diambil! Silakan edit jika perlu.
+                                </div>
+                                <div className="space-y-4">
+                                    <div><label className="text-xs font-bold text-slate-500 uppercase">Nama Item</label><input value={result.item} onChange={e => setResult({...result, item: e.target.value})} className="w-full border-b border-slate-200 py-2 text-slate-800 font-medium focus:outline-none focus:border-primary" /></div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div><label className="text-xs font-bold text-slate-500 uppercase">Nominal</label><input type="number" value={result.amount} onChange={e => setResult({...result, amount: Number(e.target.value)})} className="w-full border-b border-slate-200 py-2 text-slate-800 font-bold text-lg focus:outline-none focus:border-primary" /></div>
+                                        <div><label className="text-xs font-bold text-slate-500 uppercase">Tipe</label><select value={result.type} onChange={e => setResult({...result, type: e.target.value})} className="w-full border-b border-slate-200 py-2 text-slate-800 font-medium bg-transparent focus:outline-none focus:border-primary"><option value="expense">Pengeluaran</option><option value="income">Pemasukan</option></select></div>
+                                    </div>
+                                    <div><label className="text-xs font-bold text-slate-500 uppercase">Kategori</label><input value={result.category} onChange={e => setResult({...result, category: e.target.value})} className="w-full border-b border-slate-200 py-2 text-slate-800 font-medium focus:outline-none focus:border-primary" /></div>
+                                </div>
+                                <div className="mt-auto grid grid-cols-2 gap-3 pt-6">
+                                    <Button variant="secondary" onClick={() => setResult(null)}>Batal</Button>
+                                    <Button onClick={handleSave}>Simpan</Button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        const ReportsView = () => {
+            const { transactions } = useApp();
+            const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+            const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
+            const chartRef = useRef(null);
+            const chartInstance = useRef(null);
+
+            const filteredTx = useMemo(() => {
+                return transactions.filter(t => {
+                    const d = new Date(t.date);
+                    return d.getFullYear() === selectedYear && d.getMonth() === selectedMonth;
+                });
+            }, [transactions, selectedYear, selectedMonth]);
+
+            const stats = useMemo(() => {
+                const income = filteredTx.filter(t => t.type === 'income').reduce((acc, t) => acc + t.amount, 0);
+                const expense = filteredTx.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
+                return { income, expense, balance: income - expense };
+            }, [filteredTx]);
+
+            const categoryData = useMemo(() => {
+                const cats = {};
+                filteredTx.filter(t => t.type === 'expense').forEach(t => { cats[t.category] = (cats[t.category] || 0) + t.amount; });
+                return Object.keys(cats).map(k => ({ label: k, value: cats[k] }));
+            }, [filteredTx]);
+
+            useEffect(() => {
+                if (chartRef.current) {
+                    if (chartInstance.current) chartInstance.current.destroy();
+                    const ctx = chartRef.current.getContext('2d');
+                    chartInstance.current = new Chart(ctx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: categoryData.map(c => c.label),
+                            datasets: [{ data: categoryData.map(c => c.value), backgroundColor: ['#4f46e5', '#6366f1', '#818cf8', '#a5b4fc', '#c7d2fe'], borderWidth: 0 }]
+                        },
+                        options: { responsive: true, plugins: { legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 } } } }, cutout: '70%' }
+                    });
+                }
+                return () => { if (chartInstance.current) chartInstance.current.destroy(); };
+            }, [categoryData]);
+
+            return (
+                <div className="pb-24 fade-in p-6">
+                    <header className="mb-6"><h1 className="text-2xl font-bold text-slate-800">Laporan Keuangan</h1></header>
+                    <Card className="mb-6 flex gap-2 overflow-x-auto no-scrollbar p-3">
+                        <select value={selectedYear} onChange={e => setSelectedYear(Number(e.target.value))} className="bg-slate-50 border-none text-sm font-semibold text-slate-700 focus:ring-0 outline-none">
+                            {[2023, 2024, 2025].map(y => <option key={y} value={y}>{y}</option>)}
+                        </select>
+                        <div className="flex gap-2">
+                            {MONTHS.map((m, idx) => (
+                                <button key={idx} onClick={() => setSelectedMonth(idx)} className={`px-3 py-1 rounded-lg text-xs whitespace-nowrap ${selectedMonth === idx ? 'bg-indigo-100 text-indigo-700 font-bold' : 'bg-slate-50 text-slate-500'}`}>
+                                    {m.substring(0,3)}
+                                </button>
+                            ))}
+                        </div>
+                    </Card>
+                    <div className="grid grid-cols-3 gap-3 mb-6">
+                        <div className="bg-white p-3 rounded-xl border border-slate-100 text-center"><p className="text-[10px] text-slate-400">Pemasukan</p><p className="text-sm font-bold text-green-600">{(stats.income/1000).toFixed(0)}k</p></div>
+                        <div className="bg-white p-3 rounded-xl border border-slate-100 text-center"><p className="text-[10px] text-slate-400">Pengeluaran</p><p className="text-sm font-bold text-red-500">{(stats.expense/1000).toFixed(0)}k</p></div>
+                        <div className="bg-indigo-600 p-3 rounded-xl text-center"><p className="text-[10px] text-indigo-200">Saldo</p><p className="text-sm font-bold text-white">{(stats.balance/1000).toFixed(0)}k</p></div>
+                    </div>
+                    {categoryData.length > 0 ? (
+                        <Card className="mb-6"><h3 className="font-bold text-slate-700 text-sm mb-4">Distribusi</h3><div className="relative h-48 w-full flex justify-center"><canvas ref={chartRef} /></div></Card>
+                    ) : <div className="text-center py-10 text-slate-400 text-sm">Belum ada data.</div>}
+                    <h3 className="font-bold text-slate-700 text-sm mb-3">Rincian</h3>
+                    <div className="space-y-2">
+                        {filteredTx.map(tx => (
+                            <div key={tx.id} className="flex justify-between items-center bg-white p-3 rounded-xl border border-slate-100">
+                                <div><p className="text-sm font-medium text-slate-800">{tx.item}</p><p className="text-xs text-slate-400">{tx.category}</p></div>
+                                <span className={`text-sm font-bold ${tx.type === 'income' ? 'text-green-600' : 'text-red-500'}`}>{formatCurrency(tx.amount)}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        };
+
+        const Dashboard = () => {
+            const { transactions, deleteTransaction } = useApp();
+            const [filter, setFilter] = useState('all');
+
+            const currentMonthTx = useMemo(() => {
+                const now = new Date();
+                return transactions.filter(t => {
+                    const d = new Date(t.date);
+                    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+                });
+            }, [transactions]);
+
+            const stats = useMemo(() => {
+                const income = currentMonthTx.filter(t => t.type === 'income').reduce((acc, t) => acc + t.amount, 0);
+                const expense = currentMonthTx.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
+                return { income, expense, balance: income - expense };
+            }, [currentMonthTx]);
+
+            const filteredList = useMemo(() => {
+                if(filter === 'all') return transactions.sort((a,b) => new Date(b.created_at) - new Date(a.created_at)); 
+                return transactions.filter(t => t.type === filter).sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+            }, [transactions, filter]);
+
+            return (
+                <div className="pb-24 fade-in">
+                    <header className="bg-primary text-white pt-10 pb-16 px-6 rounded-b-[2.5rem] shadow-xl relative z-0">
+                        <div className="fit-content flex justify-between items-start mb-6">
+                            <div>
+                                <p className="text-indigo-200 text-xs font-medium mb-1">Total Saldo Bulan Ini</p>
+                                <h2 className="text-3xl font-bold">{formatCurrency(stats.balance)}</h2>
+                            </div>
+                            <div className="bg-white/20 p-2 rounded-lg backdrop-blur-sm"><Icons.Chart /></div>
+                        </div>
+                        <div className="flex gap-4">
+                            <div className="bg-white/10 flex-1 p-3 rounded-xl backdrop-blur-md">
+                                <p className="text-indigo-200 text-[10px] uppercase font-bold">Masuk</p>
+                                <p className="text-sm font-semibold mt-1">{formatCurrency(stats.income)}</p>
+                            </div>
+                            <div className="bg-white/10 flex-1 p-3 rounded-xl backdrop-blur-md">
+                                <p className="text-indigo-200 text-[10px] uppercase font-bold">Keluar</p>
+                                <p className="text-sm font-semibold mt-1">{formatCurrency(stats.expense)}</p>
+                            </div>
+                        </div>
+                    </header>
+
+                    <main className="px-6 -mt-8 relative z-10">
+                        <div className="bg-white rounded-2xl shadow-lg border border-slate-50 overflow-hidden mb-6">
+                            <div className="flex border-b border-slate-100">
+                                {['all', 'expense', 'income'].map(f => (
+                                    <button key={f} onClick={() => setFilter(f)} className={`flex-1 py-3 text-sm font-medium capitalize ${filter === f ? 'text-primary border-b-2 border-primary bg-indigo-50' : 'text-slate-400'}`}>
+                                        {f === 'all' ? 'Semua' : f === 'income' ? 'Pemasukan' : 'Pengeluaran'}
+                                    </button>
+                                ))}
+                            </div>
+                            <div className="p-2 max-h-[400px] overflow-y-auto">
+                                {filteredList.length === 0 ? <div className="text-center py-8 text-slate-400 text-xs">Belum ada data</div> : (
+                                    filteredList.map(tx => (
+                                        <div key={tx.id} className="flex items-center justify-between p-3 border-b border-slate-50 last:border-0 hover:bg-slate-50 group transition-colors">
+                                            <div className="flex items-center gap-3">
+                                                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${tx.type === 'income' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
+                                                    {tx.type === 'income' ? <span className="text-xs">▼</span> : <span className="text-xs">▲</span>}
+                                                </div>
+                                                <div>
+                                                    <h4 className="font-medium text-xs text-slate-800">{tx.item}</h4>
+                                                    <p className="text-[10px] text-slate-400">{tx.date}</p>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <span className={`font-bold text-xs ${tx.type === 'income' ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(tx.amount)}</span>
+                                                <button onClick={() => deleteTransaction(tx.id)} className="opacity-0 group-hover:opacity-100 p-1 text-slate-300 hover:text-red-500 transition-all"><Icons.Trash /></button>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    </main>
+                </div>
+            );
+        };
+
+        const Settings = () => {
+            const { user } = useApp();
+            return (
+                <div className="p-6 fade-in max-w-md mx-auto pb-24">
+                    <h1 className="text-2xl font-bold text-slate-800 mb-6">Pengaturan</h1>
+                    <Card className="mb-4">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-slate-200 rounded-full flex items-center justify-center text-slate-500"><Icons.User /></div>
+                            <div><h3 className="font-bold text-sm">{user?.displayName}</h3><p className="text-xs text-slate-400">UID: {user?.uid}</p></div>
+                        </div>
+                        <div className="mt-4 bg-slate-50 p-3 rounded-lg border border-slate-100 flex justify-between items-center">
+                            <p className="text-xs text-slate-500">Household ID</p>
+                            <code className="text-xs font-bold text-primary select-all">{user?.householdId || 'Belum bergabung'}</code>
+                        </div>
+                        <div className="mt-2 text-[10px] text-slate-400 text-center">
+                            *Bagikan ID ini ke pasanganmu untuk menyinkronkan data.
+                        </div>
+                    </Card>
+                    <Button variant="secondary" onClick={AuthService.logout} className="text-red-500 hover:bg-red-50">Keluar</Button>
+                </div>
+            );
+        };
+
+        // --- Layout ---
+        const Layout = () => {
+            const { user, loading, joinHousehold } = useApp();
+            const [view, setView] = useState('dashboard');
+            const [isAdding, setIsAdding] = useState(false);
+            const [joinIdInput, setJoinIdInput] = useState('');
+
+            if (loading) return <div className="h-screen flex items-center justify-center bg-slate-50"><div className="loader" /></div>;
+
+            if (!user.householdId) {
+                return (
+                    <div className="flex flex-col h-full p-6 items-center justify-center fade-in min-h-screen bg-slate-50">
+                        <div className="w-20 h-20 bg-indigo-100 text-primary rounded-full flex items-center justify-center mb-6">
+                            <Icons.User />
+                        </div>
+                        <h1 className="text-xl font-bold text-slate-800 mb-2 text-center">Setup Keluarga</h1>
+                        <p className="text-sm text-slate-500 text-center mb-8">Buat ID baru atau gabung dengan pasangan.</p>
+                        
+                        <Card className="w-full max-w-sm">
+                            <div className="mb-6">
+                                <label className="text-xs font-bold text-slate-400 uppercase mb-2 block">Saya yang pertama (Buat Baru)</label>
+                                <Button onClick={() => {
+                                    const id = generateId();
+                                    console.log("Joining ID:", id);
+                                    joinHousehold(id);
+                                }}>
+                                    Buat Household ID
+                                </Button>
+                            </div>
+
+                            <div className="flex items-center gap-4 my-6">
+                                <div className="h-px bg-slate-200 flex-1" />
+                                <span className="text-xs text-slate-400 font-medium">ATAU</span>
+                                <div className="h-px bg-slate-200 flex-1" />
+                            </div>
+
+                            <div>
+                                <label className="text-xs font-bold text-slate-400 uppercase mb-2 block">Gabung ke Pasangan</label>
+                                <input 
+                                    type="text" 
+                                    placeholder="Masukkan ID pasangan..."
+                                    value={joinIdInput}
+                                    onChange={(e) => setJoinIdInput(e.target.value)}
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-primary" 
+                                />
+                                <Button 
+                                    onClick={() => {
+                                        if(!joinIdInput.trim()) return alert("Masukkan ID terlebih dahulu.");
+                                        joinHousehold(joinIdInput.trim());
+                                    }}
+                                >
+                                    Gabung Sekarang
+                                </Button>
+                            </div>
+                        </Card>
+                    </div>
+                );
+            }
+
+            if (isAdding) {
+                return <AIInput onBack={() => setIsAdding(false)} />;
+            }
+
+            return (
+                <div className="min-h-screen bg-slate-50 font-sans pb-20 relative">
+                    {view === 'dashboard' && <Dashboard />}
+                    {view === 'reports' && <ReportsView />}
+                    {view === 'savings' && <SavingsView />}
+                    {view === 'settings' && <Settings />}
+
+                    <button 
+                        onClick={() => setIsAdding(true)}
+                        className="fixed bottom-28 right-6 w-16 h-16 bg-primary text-white rounded-full shadow-2xl shadow-indigo-300/50 flex items-center justify-center hover:scale-110 active:scale-90 transition-all z-50"
+                    >
+                        <Icons.Plus />
+                    </button>
+
+                    <nav className="fixed bottom-0 left-0 w-full bg-white border-t border-slate-100 px-4 py-3 flex justify-between items-center z-40 shadow-[0_-5px_15px_rgba(0,0,0,0.02)]">
+                        <button onClick={() => setView('dashboard')} className={`flex flex-col items-center gap-1 ${view === 'dashboard' ? 'text-primary' : 'text-slate-400'}`}><Icons.Home /><span className="text-[10px] font-medium">Home</span></button>
+                        <button onClick={() => setView('reports')} className={`flex flex-col items-center gap-1 ${view === 'reports' ? 'text-primary' : 'text-slate-400'}`}><Icons.Chart /><span className="text-[10px] font-medium">Laporan</span></button>
+                        <button onClick={() => setView('savings')} className={`flex flex-col items-center gap-1 ${view === 'savings' ? 'text-emerald-600' : 'text-slate-400'}`}><Icons.Wallet /><span className="text-[10px] font-medium">Tabungan</span></button>
+                        <button onClick={() => setView('settings')} className={`flex flex-col items-center gap-1 ${view === 'settings' ? 'text-primary' : 'text-slate-400'}`}><Icons.User /><span className="text-[10px] font-medium">Akun</span></button>
+                    </nav>
+                </div>
+            );
+        };
+
+        const App = () => (
+            <AppProvider>
+                <Layout />
+            </AppProvider>
+        );
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
